@@ -4,7 +4,7 @@
 
 A fully automated, production-ready AI video generation and publishing pipeline built entirely using **n8n**. This workflow orchestrates advanced AI agents to transform a text prompt or form input into a fully rendered, high-quality video with voiceovers and dynamic visuals, then automatically publishes it directly to YouTube. 🚀
 
-> ### 📝 Repository Description (سطرين للوصف الخارجي)
+> ### 📝 Repository Description    
 > A self-hosted n8n pipeline that automates the entire video production lifecycle—generating voiceovers via ElevenLabs, visuals via Fal.ai/Replicate, rendering through Shotstack, and auto-publishing directly to YouTube.
 
 ---
