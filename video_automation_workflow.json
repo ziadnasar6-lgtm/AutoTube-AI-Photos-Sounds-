@@ -1,0 +1,674 @@
+{
+  "name": "Automated Video Creation and YouTube Publishing System",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Music Video Automation Request",
+        "formDescription": "Generate AI sound and visuals automatically, render them, and upload to YouTube.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Music Description",
+              "fieldName": "description",
+              "fieldType": "string",
+              "required": true,
+              "placeholder": "e.g., A futuristic cyberpunk synthwave beat with heavy bass"
+            },
+            {
+              "fieldLabel": "Duration (seconds)",
+              "fieldName": "duration",
+              "fieldType": "number",
+              "required": true,
+              "defaultValue": 15
+            },
+            {
+              "fieldLabel": "Vocal Type",
+              "fieldName": "vocal_type",
+              "fieldType": "dropdown",
+              "required": true,
+              "options": {
+                "values": [
+                  {
+                    "label": "Male",
+                    "value": "male"
+                  },
+                  {
+                    "label": "Female",
+                    "value": "female"
+                  },
+                  {
+                    "label": "None (Instrumental)",
+                    "value": "none"
+                  }
+                ]
+              },
+              "defaultValue": "none"
+            }
+          ]
+        }
+      },
+      "id": "music-generation-form-id",
+      "name": "Music Generation Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Music description: {{ $json.description }}\nDuration: {{ $json.duration }} seconds\nVocal type: {{ $json.vocal_type }}",
+        "options": {
+          "systemMessage": "Take the user's music description, duration, and vocal type, and output a highly detailed, optimized prompt for an AI music generation API."
+        }
+      },
+      "id": "audio-ai-agent-id",
+      "name": "Audio AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1,
+      "position": [
+        300,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {}
+      },
+      "id": "openai-chat-model-audio-id",
+      "name": "OpenAI Chat Model (Audio)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        300,
+        -50
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-creds-id",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-sound-effects",
+        "sendHeaders": true,
+        "headers": {
+          "values": [
+            {
+              "name": "xi-api-key",
+              "value": "={{ $credentials.elevenlabs_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"text\": \"{{ $json.output }}\", \"duration_seconds\": {{ $('Music Generation Form').item.json.duration }}}",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "id": "elevenlabs-api-id",
+      "name": "ElevenLabs API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        550,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "/tmp/audio.mp3",
+        "dataPropertyName": "data"
+      },
+      "id": "save-audio-file-id",
+      "name": "Save Audio File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        800,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Music description: {{ $json.description }}",
+        "options": {
+          "systemMessage": "Take the user's music description, duration, and vocal type, and brainstorm a stable-diffusion visual prompt based on the form's description."
+        }
+      },
+      "id": "visual-ai-agent-id",
+      "name": "Visual AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1,
+      "position": [
+        300,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {}
+      },
+      "id": "openai-chat-model-visual-id",
+      "name": "OpenAI Chat Model (Visual)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        300,
+        650
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-creds-id",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.atlascloud.ai/v1/images/generations",
+        "sendHeaders": true,
+        "headers": {
+          "values": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.atlas_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"prompt\": \"{{ $json.output }}\", \"aspect_ratio\": \"16:9\"}",
+        "options": {}
+      },
+      "id": "atlas-cloud-image-gen-id",
+      "name": "Atlas Cloud Image Gen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        550,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  prediction_id: $input.item.json.id || $input.item.json.prediction_id || $input.item.json.task_id\n};"
+      },
+      "id": "extract-prediction-id",
+      "name": "Extract Prediction ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "wait-10s-id",
+      "name": "Wait 10s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1050,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.atlascloud.ai/v1/images/generations/{{ $json.prediction_id }}",
+        "sendHeaders": true,
+        "headers": {
+          "values": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.atlas_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-image-status-id",
+      "name": "Check Image Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1300,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "value2": "succeeded",
+              "operation": "equal"
+            }
+          ]
+        }
+      },
+      "id": "if-image-ready-id",
+      "name": "If Image Ready",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1550,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-branches-id",
+      "name": "Merge Branches",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        1850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  audio_url_or_path: \"/tmp/audio.mp3\",\n  image_url: $input.item.json.url || $input.item.json.output_url || $input.item.json.image_url\n};"
+      },
+      "id": "code-clean-urls-id",
+      "name": "Code clean urls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.shotstack.io/v1/render",
+        "sendHeaders": true,
+        "headers": {
+          "values": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $credentials.shotstack_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"timeline\": {\"soundtrack\": {\"src\": \"{{ $json.audio_url_or_path }}\", \"effect\": \"fadeInFadeOut\"}, \"tracks\": [{\"clips\": [{\"asset\": {\"type\": \"image\", \"src\": \"{{ $json.image_url }}\"}, \"start\": 0, \"length\": {{ $('Music Generation Form').item.json.duration }} }] }]}, \"output\": {\"format\": \"mp4\", \"resolution\": \"hd1080\"}}",
+        "options": {}
+      },
+      "id": "shotstack-render-id",
+      "name": "Shotstack Render",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2350,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "wait-10s-shotstack-id",
+      "name": "Wait 10s Shotstack",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        2600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.shotstack.io/v1/render/{{ $json.response.id }}",
+        "sendHeaders": true,
+        "headers": {
+          "values": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $credentials.shotstack_key }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "shotstack-poll-result-id",
+      "name": "Shotstack Poll Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.response.status }}",
+              "value2": "done",
+              "operation": "equal"
+            }
+          ]
+        }
+      },
+      "id": "if-render-done-id",
+      "name": "If Render Done",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.response.url }}",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "id": "download-mp4-video-id",
+      "name": "Download MP4 Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "=Generated AI Music Video - {{ $('Audio AI Agent').item.json.output.substring(0, 50) }}...",
+        "description": "=This automated video is generated using AI music from ElevenLabs and AI art from Atlas Cloud, rendered using Shotstack.\n\nPrompt details:\n{{ $('Audio AI Agent').item.json.output }}\n\nVisuals details:\n{{ $('Visual AI Agent').item.json.output }}",
+        "status": "unlisted",
+        "binaryPropertyName": "data"
+      },
+      "id": "youtube-upload-id",
+      "name": "YouTube Upload",
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        3650,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Music Generation Form": {
+      "main": [
+        [
+          {
+            "node": "Audio AI Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Visual AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (Audio)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Audio AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio AI Agent": {
+      "main": [
+        [
+          {
+            "node": "ElevenLabs API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs API": {
+      "main": [
+        [
+          {
+            "node": "Save Audio File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Audio File": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (Visual)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Visual AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Visual AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Atlas Cloud Image Gen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atlas Cloud Image Gen": {
+      "main": [
+        [
+          {
+            "node": "Extract Prediction ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Prediction ID": {
+      "main": [
+        [
+          {
+            "node": "Wait 10s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10s": {
+      "main": [
+        [
+          {
+            "node": "Check Image Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Image Status": {
+      "main": [
+        [
+          {
+            "node": "If Image Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Image Ready": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Wait 10s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Branches": {
+      "main": [
+        [
+          {
+            "node": "Code clean urls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code clean urls": {
+      "main": [
+        [
+          {
+            "node": "Shotstack Render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shotstack Render": {
+      "main": [
+        [
+          {
+            "node": "Wait 10s Shotstack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10s Shotstack": {
+      "main": [
+        [
+          {
+            "node": "Shotstack Poll Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shotstack Poll Result": {
+      "main": [
+        [
+          {
+            "node": "If Render Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Render Done": {
+      "main": [
+        [
+          {
+            "node": "Download MP4 Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 10s Shotstack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download MP4 Video": {
+      "main": [
+        [
+          {
+            "node": "YouTube Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionTimeout": 3600
+  },
+  "versionId": "f7d75a18-9cde-4752-b88a-df7488f28fa8",
+  "id": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
